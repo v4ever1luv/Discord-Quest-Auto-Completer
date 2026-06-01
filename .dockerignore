@@ -1,0 +1,16 @@
+data/
+.env
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+.todo.md
+AGENTS.md
+README.md
+completed.db*
+pyghidra_mcp_projects/
