@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     completed_db: Path = Field(default=Path("completed.db"))
     build_fallback: int = 504649
 
+    # Bot settings
+    bot_token: str = ""
+    bot_encryption_key: str = ""
+    max_users: int = 10
+
     model_config = SettingsConfigDict(
         env_prefix="DQ_",
         env_file=".env",

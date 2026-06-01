@@ -1,0 +1,199 @@
+from __future__ import annotations
+
+from typing import Any
+
+import discord
+import structlog
+from discord import app_commands
+
+from discord_quest._api import DiscordAPI as QuestAPI
+from discord_quest._api import _fetch_build_number
+
+log = structlog.get_logger(__name__)
+
+
+def register_commands(bot: Any) -> None:  # noqa: ANN401
+    store: Any = bot.token_store  # noqa: ANN401
+    manager: Any = bot.task_manager  # noqa: ANN401
+
+    @bot.tree.command(name="help", description="Hướng dẫn sử dụng bot")
+    async def help_cmd(interaction: discord.Interaction) -> None:
+        embed = discord.Embed(title="Quest Bot — Hướng dẫn", color=0x5865F2)
+        embed.add_field(
+            name="/token set <token>",
+            value="Gửi token Discord cho bot (chỉ mình bạn thấy)",
+            inline=False,
+        )
+        embed.add_field(
+            name="/token remove",
+            value="Xoá token khỏi bot",
+            inline=False,
+        )
+        embed.add_field(
+            name="/token info",
+            value="Xem tài khoản đã đăng ký",
+            inline=False,
+        )
+        embed.add_field(
+            name="/quests list",
+            value="Xem danh sách quest đang có",
+            inline=False,
+        )
+        embed.add_field(
+            name="/quests status",
+            value="Xem trạng thái completer",
+            inline=False,
+        )
+        embed.set_footer(text="Token được mã hoá và bảo vệ")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    class TokenGroup(app_commands.Group):
+        @app_commands.command(name="set", description="Đăng ký token Discord")
+        async def token_set(
+            self,
+            interaction: discord.Interaction,
+            token: str,
+        ) -> None:
+            await interaction.response.defer(ephemeral=True)
+
+            bn = _fetch_build_number()
+            api = QuestAPI(token, bn)
+            valid = await api.validate_token()
+            await api.close()
+
+            if not valid:
+                await interaction.followup.send(
+                    "❌ Token không hợp lệ hoặc đã hết hạn.",
+                    ephemeral=True,
+                )
+                return
+
+            uid = str(interaction.user.id)
+            store.set_token(uid, token)
+            manager.start_user(uid, token)
+
+            await interaction.followup.send(
+                "✅ Token đã được lưu và mã hoá. Bot đang chạy quest cho bạn.",
+                ephemeral=True,
+            )
+
+        @app_commands.command(name="remove", description="Xoá token khỏi bot")
+        async def token_remove(self, interaction: discord.Interaction) -> None:
+            uid = str(interaction.user.id)
+            removed = store.remove_token(uid)
+            manager.stop_user(uid)
+
+            if removed:
+                await interaction.response.send_message(
+                    "✅ Đã xoá token của bạn.",
+                    ephemeral=True,
+                )
+            else:
+                await interaction.response.send_message(
+                    "⚠️ Bạn chưa đăng ký token nào.",
+                    ephemeral=True,
+                )
+
+        @app_commands.command(name="info", description="Xem thông tin token đã lưu")
+        async def token_info(self, interaction: discord.Interaction) -> None:
+            uid = str(interaction.user.id)
+            token = store.get_token(uid)
+            if not token:
+                await interaction.response.send_message(
+                    "⚠️ Bạn chưa đăng ký token. Dùng `/token set` để thêm.",
+                    ephemeral=True,
+                )
+                return
+
+            bn = _fetch_build_number()
+            api = QuestAPI(token, bn)
+            valid = await api.validate_token()
+            await api.close()
+
+            running = manager.is_running(uid)
+            status = "🟢 Đang chạy" if running else "🔴 Chưa chạy"
+
+            if not valid:
+                msg = (
+                    "⚠️ Token đã lưu nhưng không hợp lệ. "
+                    f"Dùng `/token set` để cập nhật.\nTrạng thái: {status}"
+                )
+                await interaction.response.send_message(msg, ephemeral=True)
+                return
+
+            masked = token[:15] + "..." + token[-5:]
+            await interaction.response.send_message(
+                f"✅ Token hợp lệ\nToken: `{masked}`\nTrạng thái: {status}",
+                ephemeral=True,
+            )
+
+    class QuestsGroup(app_commands.Group):
+        @app_commands.command(name="list", description="Xem danh sách quest")
+        async def quests_list(self, interaction: discord.Interaction) -> None:
+            await interaction.response.defer(ephemeral=True)
+
+            uid = str(interaction.user.id)
+            token = store.get_token(uid)
+            if not token:
+                await interaction.followup.send(
+                    "⚠️ Bạn chưa đăng ký token. Dùng `/token set <token>`.",
+                    ephemeral=True,
+                )
+                return
+
+            bn = _fetch_build_number()
+            api = QuestAPI(token, bn)
+            r = await api.get("/users/@me/quests")
+            await api.close()
+
+            if r.status_code == 404:
+                await interaction.followup.send(
+                    "📭 Không có quest nào đang hoạt động.",
+                    ephemeral=True,
+                )
+                return
+            if r.status_code != 200:
+                await interaction.followup.send(
+                    f"❌ Lỗi API: {r.status_code}",
+                    ephemeral=True,
+                )
+                return
+
+            quests = r.json()
+            if not quests:
+                await interaction.followup.send(
+                    "📭 Không có quest nào.",
+                    ephemeral=True,
+                )
+                return
+
+            lines: list[str] = []
+            for q in quests:
+                qid = q.get("id", "?")[:8]
+                task_type = q.get("config", {}).get("task_type", "?")
+                us = q.get("userStatus") or {}
+                enrolled = "📥" if us.get("enrolledAt") else "📄"
+                lines.append(f"{enrolled} `{qid}` — {task_type}")
+
+            await interaction.followup.send(
+                f"**Quest của bạn ({len(quests)}):**\n" + "\n".join(lines),
+                ephemeral=True,
+            )
+
+        @app_commands.command(name="status", description="Xem trạng thái completer")
+        async def quests_status(self, interaction: discord.Interaction) -> None:
+            uid = str(interaction.user.id)
+            running = manager.is_running(uid)
+            if running:
+                await interaction.response.send_message(
+                    "🟢 Bot đang tự động hoàn thành quest cho bạn.",
+                    ephemeral=True,
+                )
+            else:
+                await interaction.response.send_message(
+                    "🔴 Bot chưa chạy cho bạn. Đã có token chưa? `/token info`",
+                    ephemeral=True,
+                )
+
+    bot.tree.add_command(TokenGroup(name="token", description="Quản lý token"))
+    bot.tree.add_command(QuestsGroup(name="quests", description="Xem quest và trạng thái"))

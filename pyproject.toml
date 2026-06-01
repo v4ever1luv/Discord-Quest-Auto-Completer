@@ -11,10 +11,12 @@ dependencies = [
     "cryptography>=44.0",
     "keyring>=25.6",
     "websockets>=15.0",
+    "discord-py>=2.5,<3",
 ]
 
 [project.scripts]
 discord-quest = "discord_quest.__main__:main"
+discord-quest-bot = "discord_quest.bot.__main__:main"
 
 [build-system]
 requires = ["setuptools>=75"]
