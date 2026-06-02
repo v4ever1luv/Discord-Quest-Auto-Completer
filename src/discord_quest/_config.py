@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
 
 
 class Settings(BaseSettings):
@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     token_file: Path = Field(default=Path(".token"))
     completed_db: Path = Field(default=Path("completed.db"))
     build_fallback: int = 504649
+    health_port: int = 0
 
     # Bot settings
     bot_token: str = ""
@@ -30,6 +31,24 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         frozen=True,
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        sources = (init_settings, env_settings, dotenv_settings)
+        try:
+            cfg_path = Path("config.yaml")
+            if cfg_path.exists():
+                sources += (YamlConfigSettingsSource(settings_cls, yaml_file=str(cfg_path)),)
+        except Exception:
+            pass
+        return sources
 
 
 settings = Settings()

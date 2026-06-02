@@ -11,6 +11,7 @@ import structlog
 
 from ._completer import QuestAutocompleter
 from ._config import settings
+from ._health import start_health_server
 from ._log import setup_logging
 
 log = structlog.get_logger(__name__)
@@ -54,6 +55,7 @@ async def amain(poll_interval: int, proxy: str | None, timeout: int, debug: bool
         os.environ["DQ_DEBUG"] = str(debug)
 
     setup_logging()
+    start_health_server(settings.health_port)
     log.info(
         "startup",
         poll_interval=poll_interval,

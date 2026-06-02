@@ -62,6 +62,7 @@ class QuestAutocompleter:
         self.gateway = DiscordGateway(token, self.build_number)
         self.running = True
         self._last_fetch: str | None = None
+        self._poll_triggered = False
 
     async def start(self) -> None:
         self.store.connect()
@@ -76,6 +77,7 @@ class QuestAutocompleter:
 
         gateway_task = asyncio.create_task(self.gateway.connect())
         self.gateway.on_quest_update(self._on_quest_update)
+        self.gateway.on_passive_update(self._on_passive_update)
 
         log.info("startup.begin")
         try:
@@ -106,6 +108,16 @@ class QuestAutocompleter:
 
     async def _handle_quest_update(self, data: dict[str, Any]) -> None:
         await self._process_quest(Quest.from_dict(data))
+
+    def _on_passive_update(self, data: dict[str, Any]) -> None:
+        if not self._poll_triggered:
+            self._poll_triggered = True
+            asyncio.create_task(self._trigger_poll())
+
+    async def _trigger_poll(self) -> None:
+        await asyncio.sleep(2)
+        await self._poll()
+        self._poll_triggered = False
 
     async def _poll(self) -> None:
         log.info("poll.start")
@@ -154,8 +166,12 @@ class QuestAutocompleter:
             log.debug("quest.unsupported", quest_id=quest.id, task=task_type)
             return
 
+        saved = self.store.load_progress(quest.id)
+
         if task_type in HEARTBEAT_TASKS:
-            await self._process_heartbeat(quest)
+            await self._process_heartbeat(
+                quest, initial_slept=(saved or {}).get("total_slept", 0.0)
+            )
 
         elif task_type in VIDEO_TASKS:
             await self._process_video(quest, is_mobile=(task_type == "WATCH_VIDEO_ON_MOBILE"))
@@ -168,16 +184,18 @@ class QuestAutocompleter:
             return False
         return True
 
-    async def _process_heartbeat(self, quest: Quest) -> None:
-        log.info("heartbeat.start", quest_id=quest.id)
+    async def _process_heartbeat(self, quest: Quest, initial_slept: float = 0.0) -> None:
+        log.info("heartbeat.start", quest_id=quest.id, resumed=initial_slept > 0)
         us = quest.user_status or UserStatus()
+        enrolled_at = us.enrolled_at or ""
 
-        if not us.enrolled_at and settings.auto_accept:
+        if not enrolled_at and settings.auto_accept:
             accepted = await self._enroll_quest(quest.id)
             if not accepted:
                 return
+            enrolled_at = us.enrolled_at or ""
 
-        total_slept = 0.0
+        total_slept = initial_slept
         attempt = 0
 
         while self.running:
@@ -215,6 +233,7 @@ class QuestAutocompleter:
             await asyncio.sleep(sleep_sec)
             total_slept += sleep_sec
             attempt += 1
+            self.store.save_progress(quest.id, "heartbeat", total_slept, enrolled_at)
 
     async def _process_video(self, quest: Quest, is_mobile: bool = False) -> None:
         log.info("video.start", quest_id=quest.id, mobile=is_mobile)

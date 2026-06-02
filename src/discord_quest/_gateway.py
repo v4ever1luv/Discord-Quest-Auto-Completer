@@ -13,6 +13,7 @@ log = structlog.get_logger(__name__)
 GATEWAY_URL = "wss://gateway.discord.gg/?v=9&encoding=json"
 
 OnQuestUpdate = Callable[[dict[str, Any]], None]
+OnPassiveUpdate = Callable[[dict[str, Any]], None]
 
 
 class DiscordGateway:
@@ -23,9 +24,13 @@ class DiscordGateway:
         self.ws: websockets.client.WebSocketClientProtocol | None = None
         self._running = False
         self._on_quest_update: OnQuestUpdate | None = None
+        self._on_passive_update: OnPassiveUpdate | None = None
 
     def on_quest_update(self, callback: OnQuestUpdate) -> None:
         self._on_quest_update = callback
+
+    def on_passive_update(self, callback: OnPassiveUpdate) -> None:
+        self._on_passive_update = callback
 
     async def connect(self) -> None:
         self._running = True
@@ -95,6 +100,8 @@ class DiscordGateway:
                     t = msg.get("t", "")
                     if t == "USER_QUEST_UPDATE" and self._on_quest_update:
                         self._on_quest_update(msg.get("d", {}))
+                    if t == "PASSIVE_UPDATE_V2" and self._on_passive_update:
+                        self._on_passive_update(msg.get("d", {}))
                 elif op == 7:
                     log.info("gateway.reconnect_requested")
                     break

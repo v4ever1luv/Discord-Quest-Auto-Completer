@@ -7,6 +7,7 @@ import sys
 import structlog
 
 from discord_quest._config import settings
+from discord_quest._health import start_health_server
 from discord_quest._log import setup_logging
 from discord_quest.bot._client import BotClient
 
@@ -16,6 +17,7 @@ log = structlog.get_logger(__name__)
 def main() -> None:
     """Run the bot."""
     setup_logging()
+    start_health_server(settings.health_port)
 
     token = settings.bot_token
     if not token:
