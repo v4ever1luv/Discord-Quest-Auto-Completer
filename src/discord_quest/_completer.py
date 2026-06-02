@@ -158,7 +158,7 @@ class QuestAutocompleter:
             await self._process_heartbeat(quest)
 
         elif task_type in VIDEO_TASKS:
-            await self._process_video(quest)
+            await self._process_video(quest, is_mobile=(task_type == "WATCH_VIDEO_ON_MOBILE"))
 
     def _is_pending(self, quest: Quest) -> bool:
         if self.store.is_completed(quest.id):
@@ -216,8 +216,8 @@ class QuestAutocompleter:
             total_slept += sleep_sec
             attempt += 1
 
-    async def _process_video(self, quest: Quest) -> None:
-        log.info("video.start", quest_id=quest.id)
+    async def _process_video(self, quest: Quest, is_mobile: bool = False) -> None:
+        log.info("video.start", quest_id=quest.id, mobile=is_mobile)
         segments = 0
         attempt = 0
 
@@ -246,7 +246,9 @@ class QuestAutocompleter:
                 self.store.mark_completed(quest.id, fresh_us.completed_at)
                 return
 
-            r2 = await self.api.post(f"/users/@me/quests/{quest.id}/video-progress")
+            r2 = await self.api.post(
+                f"/users/@me/quests/{quest.id}/video-progress", is_mobile=is_mobile
+            )
             if r2.status_code in (200, 204):
                 segments += 1
                 log.info(

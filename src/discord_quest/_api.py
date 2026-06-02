@@ -60,27 +60,44 @@ def _fetch_build_number() -> int:
         return settings.build_fallback
 
 
-def make_super_properties(build_number: int) -> str:
-    obj = {
-        "os": "Windows",
-        "browser": "Discord Client",
-        "release_channel": "stable",
-        "client_version": "1.0.9175",
-        "os_version": "10.0.26100",
-        "os_arch": "x64",
-        "app_arch": "x64",
-        "system_locale": "en-US",
-        "browser_user_agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "discord/1.0.9175 Chrome/128.0.6613.186 "
-            "Electron/32.2.7 Safari/537.36"
-        ),
-        "browser_version": "32.2.7",
-        "client_build_number": build_number,
-        "native_build_number": 59498,
-        "client_event_source": None,
-    }
+def make_super_properties(build_number: int, mobile: bool = False) -> str:
+    if mobile:
+        obj = {
+            "os": "Android",
+            "browser": "Discord Android",
+            "release_channel": "stable",
+            "client_version": "281.0",
+            "os_version": "35",
+            "os_arch": "aarch64",
+            "app_arch": "arm64",
+            "system_locale": "en-US",
+            "browser_user_agent": "Discord-Android/281.0",
+            "browser_version": "281.0",
+            "client_build_number": build_number,
+            "native_build_number": build_number,
+            "client_event_source": None,
+        }
+    else:
+        obj = {
+            "os": "Windows",
+            "browser": "Discord Client",
+            "release_channel": "stable",
+            "client_version": "1.0.9175",
+            "os_version": "10.0.26100",
+            "os_arch": "x64",
+            "app_arch": "x64",
+            "system_locale": "en-US",
+            "browser_user_agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "discord/1.0.9175 Chrome/128.0.6613.186 "
+                "Electron/32.2.7 Safari/537.36"
+            ),
+            "browser_version": "32.2.7",
+            "client_build_number": build_number,
+            "native_build_number": 59498,
+            "client_event_source": None,
+        }
     return base64.b64encode(json.dumps(obj).encode()).decode()
 
 
@@ -143,10 +160,20 @@ class DiscordAPI:
         return r
 
     async def post(
-        self, path: str, payload: dict[str, Any] | None = None, **kwargs: Any
+        self,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        is_mobile: bool = False,
+        **kwargs: Any,
     ) -> httpx.Response:
         kwargs.setdefault("timeout", self.timeout)
-        log.debug("http.post", path=path)
+        if is_mobile:
+            kwargs.setdefault("headers", {})
+            kwargs["headers"].setdefault(
+                "X-Super-Properties", make_super_properties(self.build_number, mobile=True)
+            )
+            kwargs["headers"].setdefault("User-Agent", "Discord-Android/281.0")
+        log.debug("http.post", path=path, mobile=is_mobile)
         r = await self.client.post(path, json=payload, **kwargs)
         log.debug("http.post_done", path=path, status=r.status_code, size=len(r.content))
         return r
