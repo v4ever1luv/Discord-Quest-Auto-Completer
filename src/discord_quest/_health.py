@@ -34,7 +34,7 @@ class _ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 def start_health_server(port: int = 8080) -> _ThreadedHTTPServer | None:
     if port <= 0:
         return None
-    server = _ThreadedHTTPServer(("0.0.0.0", port), HealthHandler)
+    server = _ThreadedHTTPServer(("127.0.0.1", port), HealthHandler)
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     log.info("health.started", port=port)

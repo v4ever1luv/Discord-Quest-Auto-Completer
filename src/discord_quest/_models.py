@@ -40,12 +40,29 @@ class Quest:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Quest:
         us_raw = _get(data, "userStatus", "user_status")
+        content = data.get("content") or {}
+        if not us_raw and content:
+            us_raw = _get(content, "userStatus", "user_status")
         return cls(
             id=data.get("id", ""),
             config=data.get("config", {}),
             user_status=UserStatus.from_dict(us_raw) if us_raw else None,
             raw=data,
         )
+
+    def get_task_type(self) -> str:
+        tasks = (self.config.get("task_config_v2") or {}).get("tasks") or {}
+        for name in tasks:
+            return name
+        return self.config.get("task_type") or ""
+
+    def get_task_target(self) -> int:
+        task_type = self.get_task_type()
+        if not task_type:
+            return 0
+        tasks = (self.config.get("task_config_v2") or {}).get("tasks") or {}
+        task = tasks.get(task_type) or {}
+        return task.get("target") or 0
 
 
 SUPPORTED_TASKS = frozenset(

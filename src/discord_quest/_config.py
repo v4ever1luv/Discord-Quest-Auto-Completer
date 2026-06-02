@@ -7,21 +7,30 @@ from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettin
 
 
 class Settings(BaseSettings):
-    api_base: str = "https://discord.com/api/v9"
     poll_interval: int = 60
-    heartbeat_interval: int = 20
     auto_accept: bool = True
     log_progress: bool = True
     debug: bool = True
-    request_timeout: int = 30
-    proxy: str | None = None
     token_file: Path = Field(default=Path(".token"))
     completed_db: Path = Field(default=Path("completed.db"))
-    build_fallback: int = 504649
     health_port: int = 0
 
-    # Anti-detect
-    anti_detect: bool = True
+    # Playwright settings
+    browser_type: str = "chromium"
+    headless: bool = False
+    user_data_dir: str = ".discord_profile"
+
+    # Blacklist quest IDs — skip these
+    quest_blacklist: list[str] = Field(default_factory=list)
+
+    # Orion — auto-update from GitHub
+    orion_auto_update: bool = True
+
+    # Auto-stop khi không có quest pending sau N lần poll
+    max_idle_polls: int = 3
+
+    # Random delay [min, max] seconds before enroll
+    enroll_delay_range: list[int] = Field(default=[5, 15])
 
     # Notification settings
     notify_webhook_url: str = ""

@@ -3,13 +3,34 @@ from __future__ import annotations
 from typing import Any
 
 import discord
+import httpx
 import structlog
 from discord import app_commands
 
-from discord_quest._api import DiscordAPI as QuestAPI
-from discord_quest._api import _fetch_build_number
-
 log = structlog.get_logger(__name__)
+
+
+async def _validate_token(token: str) -> bool:
+    try:
+        headers = {"Authorization": token, "Content-Type": "application/json"}
+        async with httpx.AsyncClient(base_url="https://discord.com/api/v9") as c:
+            r = await c.get("/users/@me", headers=headers, timeout=15)
+            return r.status_code == 200
+    except Exception:
+        return False
+
+
+async def _fetch_quests(token: str) -> list[dict[str, Any]]:
+    try:
+        headers = {"Authorization": token, "Content-Type": "application/json"}
+        async with httpx.AsyncClient(base_url="https://discord.com/api/v9") as c:
+            r = await c.get("/quests/@me", headers=headers, timeout=15)
+            if r.status_code != 200:
+                return []
+            data = r.json()
+            return data.get("quests") or []
+    except Exception:
+        return []
 
 
 def register_commands(bot: Any) -> None:  # noqa: ANN401
@@ -56,10 +77,7 @@ def register_commands(bot: Any) -> None:  # noqa: ANN401
         ) -> None:
             await interaction.response.defer(ephemeral=True)
 
-            bn = _fetch_build_number()
-            api = QuestAPI(token, bn)
-            valid = await api.validate_token()
-            await api.close()
+            valid = await _validate_token(token)
 
             if not valid:
                 await interaction.followup.send(
@@ -105,10 +123,7 @@ def register_commands(bot: Any) -> None:  # noqa: ANN401
                 )
                 return
 
-            bn = _fetch_build_number()
-            api = QuestAPI(token, bn)
-            valid = await api.validate_token()
-            await api.close()
+            valid = await _validate_token(token)
 
             running = manager.is_running(uid)
             status = "🟢 Đang chạy" if running else "🔴 Chưa chạy"
@@ -141,25 +156,8 @@ def register_commands(bot: Any) -> None:  # noqa: ANN401
                 )
                 return
 
-            bn = _fetch_build_number()
-            api = QuestAPI(token, bn)
-            r = await api.get("/users/@me/quests")
-            await api.close()
+            quests = await _fetch_quests(token)
 
-            if r.status_code == 404:
-                await interaction.followup.send(
-                    "📭 Không có quest nào đang hoạt động.",
-                    ephemeral=True,
-                )
-                return
-            if r.status_code != 200:
-                await interaction.followup.send(
-                    f"❌ Lỗi API: {r.status_code}",
-                    ephemeral=True,
-                )
-                return
-
-            quests = r.json()
             if not quests:
                 await interaction.followup.send(
                     "📭 Không có quest nào.",

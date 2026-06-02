@@ -29,16 +29,16 @@ def _parse_args() -> argparse.Namespace:
         help="Poll interval in seconds (default: %(default)s)",
     )
     parser.add_argument(
-        "--proxy",
-        type=str,
+        "--headless",
+        action="store_true",
         default=None,
-        help="HTTP/S proxy URL (e.g. http://127.0.0.1:8080)",
+        help="Run browser in headless mode",
     )
     parser.add_argument(
-        "--timeout",
-        type=int,
-        default=settings.request_timeout,
-        help="HTTP request timeout in seconds (default: %(default)s)",
+        "--user-data-dir",
+        type=str,
+        default=None,
+        help="Chrome user data directory path",
     )
     parser.add_argument(
         "--debug",
@@ -49,22 +49,23 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def amain(poll_interval: int, proxy: str | None, timeout: int, debug: bool | None) -> None:
+async def amain(
+    poll_interval: int, headless: bool | None, user_data_dir: str | None, debug: bool | None
+) -> None:
     """Async entry point."""
     if debug is not None:
         os.environ["DQ_DEBUG"] = str(debug)
+    if headless is not None:
+        os.environ["DQ_HEADLESS"] = str(headless)
+    if user_data_dir is not None:
+        os.environ["DQ_USER_DATA_DIR"] = user_data_dir
 
     setup_logging()
     start_health_server(settings.health_port)
-    log.info(
-        "startup",
-        poll_interval=poll_interval,
-        proxy=bool(proxy),
-        timeout=timeout,
-    )
+    log.info("startup", poll_interval=poll_interval, headless=settings.headless)
 
     token = _load_token()
-    completer = QuestAutocompleter(token, proxy)
+    completer = QuestAutocompleter(token)
     await completer.start()
 
 
@@ -84,7 +85,7 @@ def main() -> None:
     """CLI entry: parse args, run loop."""
     args = _parse_args()
     try:
-        asyncio.run(amain(args.poll_interval, args.proxy, args.timeout, args.debug))
+        asyncio.run(amain(args.poll_interval, args.headless, args.user_data_dir, args.debug))
     except KeyboardInterrupt:
         log.info("shutdown.keyboard")
     except Exception as e:
