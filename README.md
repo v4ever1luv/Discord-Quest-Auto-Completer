@@ -52,6 +52,43 @@ Biến môi trường prefix `DQ_` hoặc file `.env`:
 | `DQ_REQUEST_TIMEOUT` | `30` | HTTP timeout (giây) |
 | `DQ_PROXY` | — | Proxy URL |
 | `DQ_BUILD_FALLBACK` | `504649` | Build number dự phòng |
+| `DQ_BOT_TOKEN` | — | Discord Bot token (cho bot mode) |
+| `DQ_BOT_ENCRYPTION_KEY` | — | Key mã hoá token (tự sinh nếu để trống) |
+| `DQ_MAX_USERS` | `10` | Số user tối đa bot phục vụ |
+
+## Bot Discord
+
+Chạy bot với slash commands để quản lý quest từ Discord.
+
+```bash
+# Cần set DQ_BOT_TOKEN trước
+discord-quest-bot
+
+# Hoặc double-click start_bot.ps1 (Windows)
+```
+
+### Slash Commands
+
+| Lệnh | Mô tả |
+|---|---|
+| `/token set <token>` | Gửi token Discord cá nhân (chỉ bạn thấy) |
+| `/token remove` | Xoá token đã lưu |
+| `/token info` | Kiểm tra token hợp lệ |
+| `/quests list` | Danh sách quest đang có |
+| `/quests status` | Trạng thái auto-completer |
+| `/help` | Hướng dẫn |
+
+### Kiến trúc Bot
+
+```
+bot/
+├── __init__.py           # Package marker
+├── __main__.py           # Entry: load token, start BotClient
+├── _client.py            # BotClient (discord.py Bot subclass)
+├── _commands.py          # Slash command definitions
+├── _token_store.py       # EncryptedTokenStore (Fernet + SQLite)
+└── _task_manager.py      # TaskManager: async tasks per user
+```
 
 ## Cấu trúc mã nguồn
 

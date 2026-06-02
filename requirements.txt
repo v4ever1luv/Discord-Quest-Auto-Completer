@@ -1,0 +1,8 @@
+httpx>=0.28
+pydantic>=2.10
+pydantic-settings>=2.7
+structlog>=25.1
+cryptography>=44.0
+keyring>=25.6
+websockets>=15.0
+discord-py>=2.5,<3
