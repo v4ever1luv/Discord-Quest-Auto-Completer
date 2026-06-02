@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     build_fallback: int = 504649
     health_port: int = 0
 
+    # Anti-detect
+    anti_detect: bool = True
+
+    # Notification settings
+    notify_webhook_url: str = ""
+    notify_telegram_token: str = ""
+    notify_telegram_chat_id: str = ""
+
     # Bot settings
     bot_token: str = ""
     bot_encryption_key: str = ""

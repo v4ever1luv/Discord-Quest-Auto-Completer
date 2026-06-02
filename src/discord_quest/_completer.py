@@ -18,6 +18,7 @@ from ._models import (
     UserStatus,
     _get,
 )
+from ._notify import send_notification
 from ._persist import StateStore
 
 log = structlog.get_logger(__name__)
@@ -225,7 +226,7 @@ class QuestAutocompleter:
                 slept=f"{total_slept:.0f}s",
             )
             if progress_pct >= 100:
-                await self._trigger_complete(quest.id)
+                await self._trigger_complete(quest.id, quest.config.get("task_type", ""))
                 return
 
             sleep_sec = compute_sleep(quest, attempt)
@@ -263,6 +264,9 @@ class QuestAutocompleter:
             if fresh_us and fresh_us.completed_at:
                 log.info("video.completed", quest_id=quest.id)
                 self.store.mark_completed(quest.id, fresh_us.completed_at)
+                asyncio.create_task(
+                    send_notification(quest.id, "", quest.config.get("task_type", ""))
+                )
                 return
 
             r2 = await self.api.post(
@@ -303,7 +307,7 @@ class QuestAutocompleter:
                 attempt += 1
         return False
 
-    async def _trigger_complete(self, quest_id: str) -> None:
+    async def _trigger_complete(self, quest_id: str, task_type: str = "") -> None:
         for _ in range(3):
             try:
                 r = await self.api.post(
@@ -314,6 +318,8 @@ class QuestAutocompleter:
                     data: dict[str, Any] = r.json()
                     completed_at = _get(data, "completedAt", "completed_at") or ""
                     self.store.mark_completed(quest_id, completed_at)
+                    reward = data.get("reward", {}).get("name", "")
+                    asyncio.create_task(send_notification(quest_id, reward, task_type))
                     return
                 log.warn("complete.error", quest_id=quest_id, status=r.status_code)
                 await asyncio.sleep(5)

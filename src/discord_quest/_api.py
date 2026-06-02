@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import random
 import re
 from typing import Any
 
@@ -152,8 +153,33 @@ class DiscordAPI:
             }
         )
 
+    _ROTATE_UAS = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        " (KHTML, like Gecko) discord/1.0.9175 Chrome/128.0.6613.186"
+        " Electron/32.2.7 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        " (KHTML, like Gecko) discord/1.0.9176 Chrome/128.0.6613.187"
+        " Electron/32.2.8 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        " (KHTML, like Gecko) discord/1.0.9177 Chrome/128.0.6613.188"
+        " Electron/32.2.9 Safari/537.36",
+    ]
+
+    _ROTATE_LOCALES = ["en-US", "en-GB", "en", "vi-VN", "ja-JP"]
+
+    def _rotate_headers(self) -> None:
+        if not settings.anti_detect:
+            return
+        self.client.headers["User-Agent"] = random.choice(self._ROTATE_UAS)
+        loc = random.choice(self._ROTATE_LOCALES)
+        self.client.headers["Accept-Language"] = f"{loc},en;q=0.9"
+        self.client.headers["X-Discord-Locale"] = loc
+        bn = self.build_number + random.randint(-5, 5)
+        self.client.headers["X-Super-Properties"] = make_super_properties(bn)
+
     async def get(self, path: str, **kwargs: Any) -> httpx.Response:
         kwargs.setdefault("timeout", self.timeout)
+        self._rotate_headers()
         log.debug("http.get", path=path)
         r = await self.client.get(path, **kwargs)
         log.debug("http.get_done", path=path, status=r.status_code, size=len(r.content))

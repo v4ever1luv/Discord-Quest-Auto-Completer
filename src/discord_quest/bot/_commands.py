@@ -195,5 +195,55 @@ def register_commands(bot: Any) -> None:  # noqa: ANN401
                     ephemeral=True,
                 )
 
+    class AdminGroup(app_commands.Group):
+        def _is_owner(self, interaction: discord.Interaction) -> bool:
+            app = interaction.client.application
+            return app is not None and interaction.user.id == app.owner.id
+
+        @app_commands.command(name="list", description="Danh sách user đã đăng ký token")
+        async def admin_list(self, interaction: discord.Interaction) -> None:
+            if not self._is_owner(interaction):
+                await interaction.response.send_message(
+                    "❌ Chỉ bot owner mới dùng được.", ephemeral=True
+                )
+                return
+            await interaction.response.defer(ephemeral=True)
+            users = store.list_users()
+            active = manager.list_active()
+            lines = [f"**Tổng: {len(users)} user**"]
+            for uid in users:
+                status = "🟢" if uid in active else "🔴"
+                lines.append(f"{status} `{uid}`")
+            await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+        @app_commands.command(name="start-all", description="Chạy quest cho tất cả user")
+        async def admin_start_all(self, interaction: discord.Interaction) -> None:
+            if not self._is_owner(interaction):
+                await interaction.response.send_message(
+                    "❌ Chỉ bot owner mới dùng được.", ephemeral=True
+                )
+                return
+            await interaction.response.defer(ephemeral=True)
+            users = store.list_users()
+            started = 0
+            for uid in users:
+                token = store.get_token(uid)
+                if token and not manager.is_running(uid):
+                    manager.start_user(uid, token)
+                    started += 1
+            await interaction.followup.send(f"✅ Đã start **{started}** user.", ephemeral=True)
+
+        @app_commands.command(name="stop-all", description="Dừng tất cả user")
+        async def admin_stop_all(self, interaction: discord.Interaction) -> None:
+            if not self._is_owner(interaction):
+                await interaction.response.send_message(
+                    "❌ Chỉ bot owner mới dùng được.", ephemeral=True
+                )
+                return
+            await interaction.response.defer(ephemeral=True)
+            manager.stop_all()
+            await interaction.followup.send("✅ Đã dừng tất cả user.", ephemeral=True)
+
     bot.tree.add_command(TokenGroup(name="token", description="Quản lý token"))
     bot.tree.add_command(QuestsGroup(name="quests", description="Xem quest và trạng thái"))
+    bot.tree.add_command(AdminGroup(name="admin", description="Admin - quản lý user"))
